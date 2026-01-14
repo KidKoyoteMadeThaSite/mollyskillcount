@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Molly's Kill Count</title>
+
+    <!-- Barrio from Google Fonts (needs internet to load) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barrio&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0b0f1a;
+        color: #e9eefc;
+        font-family: "Century Gothic", "Futura", "Trebuchet MS", Arial, sans-serif;
+      }
+
+      .card {
+        width: min(720px, 92vw);
+        padding: 32px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+        text-align: center;
+      }
+
+      h1 {
+        margin: 0 0 18px 0;
+        font-size: 52px;
+        letter-spacing: 1px;
+        font-family: "Barrio", cursive;
+      }
+
+      .line {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.5;
+        opacity: 0.95;
+      }
+
+      #killCount {
+        display: inline-block;
+        padding: 4px 14px;
+        margin: 0 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.10);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        font-weight: 800;
+        font-size: 34px;
+        letter-spacing: 0.5px;
+      }
+
+      .sub {
+        margin-top: 18px;
+        font-size: 14px;
+        opacity: 0.65;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <h1>Molly's Kill Count</h1>
+
+      <p class="line">
+        Molly has killed
+        <span id="killCount">0</span>
+        people
+      </p>
+
+    </div>
+
+    <script>
+      const START_VALUE = 755550;
+      const DAILY_INCREASE = 575;
+
+      // Jan 14, 2026 at 00:00 Eastern (fixed UTC-5) = Jan 14, 2026 05:00 UTC
+      const START_UTC_MS = Date.UTC(2026, 0, 14, 5, 0, 0);
+      const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+      function calculateKillCount() {
+        const nowUtc = Date.now();
+        const daysPassed = Math.floor((nowUtc - START_UTC_MS) / MS_PER_DAY);
+        const safeDays = Math.max(0, daysPassed);
+        return START_VALUE + safeDays * DAILY_INCREASE;
+      }
+
+      function render() {
+        document.getElementById("killCount").textContent =
+          calculateKillCount().toLocaleString("en-US");
+      }
+
+      render();
+      setInterval(render, 60 * 1000);
+    </script>
+  </body>
+</html>
