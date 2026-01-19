@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Molly's Kill Count</title>
 
-    <!-- Barrio from Google Fonts (needs internet to load) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -18,16 +17,23 @@
         margin: 0;
         min-height: 100vh;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        background: #0b0f1a;
-        color: #e9eefc;
+        background: var(--bg);
+        color: var(--fg);
         font-family: "Century Gothic", "Futura", "Trebuchet MS", Arial, sans-serif;
+        transition: background 0.6s ease;
+      }
+
+      :root {
+        --bg: #0b0f1a;
+        --fg: #e9eefc;
       }
 
       .card {
-        width: min(720px, 92vw);
-        padding: 32px;
+        width: min(760px, 94vw);
+        padding: 28px;
         border-radius: 18px;
         background: rgba(255, 255, 255, 0.06);
         border: 1px solid rgba(255, 255, 255, 0.12);
@@ -37,34 +43,69 @@
 
       h1 {
         margin: 0 0 18px 0;
-        font-size: 52px;
-        letter-spacing: 1px;
+        font-size: clamp(36px, 8vw, 52px);
         font-family: "Barrio", cursive;
       }
 
       .line {
-        margin: 0;
-        font-size: 24px;
-        line-height: 1.5;
-        opacity: 0.95;
+        font-size: clamp(20px, 5vw, 24px);
       }
 
       #killCount {
         display: inline-block;
-        padding: 4px 14px;
-        margin: 0 8px;
+        padding: 6px 16px;
+        margin: 6px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.10);
-        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.2);
         font-weight: 800;
-        font-size: 34px;
-        letter-spacing: 0.5px;
+        font-size: clamp(26px, 6vw, 34px);
       }
 
-      .sub {
-        margin-top: 18px;
+      button {
+        margin-top: 16px;
+        padding: 14px 20px;
+        font-size: 16px;
+        border-radius: 12px;
+        border: none;
+        background: rgba(255, 255, 255, 0.15);
+        color: inherit;
+        cursor: pointer;
+      }
+
+      button:active {
+        transform: scale(0.97);
+      }
+
+      .history-controls {
+        margin-top: 14px;
+      }
+
+      .history {
+        display: none;
+        margin-top: 14px;
+        max-height: 320px;
+        overflow-y: auto;
+        text-align: left;
         font-size: 14px;
-        opacity: 0.65;
+        opacity: 0.9;
+      }
+
+      .history div {
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .label {
+        opacity: 0.7;
+        font-size: 12px;
+        margin-left: 6px;
+      }
+
+      .version {
+        margin-top: 18px;
+        font-size: 12px;
+        opacity: 0.5;
       }
     </style>
   </head>
@@ -79,30 +120,174 @@
         people
       </p>
 
+      <button id="toggleHistoryBtn" onclick="toggleHistory()">
+        Show History
+      </button>
+
+      <div class="history-controls" id="historyControls" style="display: none;">
+        <button onclick="toggleSort()">
+          Sort: <span id="sortLabel">Newest</span>
+        </button>
+      </div>
+
+      <div id="history" class="history"></div>
+
+      <button id="audioToggleBtn" onclick="toggleAudio()">
+        Unmute Music
+      </button>
     </div>
+
+    <div class="version">Update 1.1</div>
+
+    <!-- Background audio -->
+    <audio id="bgAudio" src="Kill.mp3" loop preload="auto"></audio>
 
     <script>
       const START_VALUE = 755550;
       const DAILY_INCREASE = 575;
 
-      // Jan 14, 2026 at 00:00 Eastern (fixed UTC-5) = Jan 14, 2026 05:00 UTC
       const START_UTC_MS = Date.UTC(2026, 0, 14, 5, 0, 0);
-      const MS_PER_DAY = 24 * 60 * 60 * 1000;
+      const MS_PER_DAY = 86400000;
 
-      function calculateKillCount() {
-        const nowUtc = Date.now();
-        const daysPassed = Math.floor((nowUtc - START_UTC_MS) / MS_PER_DAY);
-        const safeDays = Math.max(0, daysPassed);
-        return START_VALUE + safeDays * DAILY_INCREASE;
+      const SPECIAL_DAY_UTC = Date.UTC(2026, 1, 6, 5, 0, 0);
+      const SPECIAL_REDUCTION = 49;
+
+      const HISTORY_START_UTC = Date.UTC(2023, 0, 1, 5, 0, 0);
+      const HISTORY_START_VALUE = 106375;
+
+      const colorStages = [
+        "#0b0f1a",
+        "#1a0b16",
+        "#0b1a14",
+        "#1a160b",
+        "#120b1a",
+        "#0b121a"
+      ];
+
+      let historyOpen = false;
+      let sortNewestFirst = true;
+      let audioStarted = false;
+
+      function calculateKillCount(atTime = Date.now()) {
+        let daysPassed = Math.floor((atTime - START_UTC_MS) / MS_PER_DAY);
+        daysPassed = Math.max(0, daysPassed);
+
+        let total = START_VALUE + daysPassed * DAILY_INCREASE;
+
+        if (atTime >= SPECIAL_DAY_UTC) {
+          total -= SPECIAL_REDUCTION;
+        }
+
+        return total;
       }
 
-      function render() {
+      function applyColor(value) {
+        const stage = Math.floor(value / 100000) % colorStages.length;
+        document.documentElement.style.setProperty("--bg", colorStages[stage]);
+      }
+
+      function renderMain() {
+        const value = calculateKillCount();
         document.getElementById("killCount").textContent =
-          calculateKillCount().toLocaleString("en-US");
+          value.toLocaleString("en-US");
+        applyColor(value);
       }
 
-      render();
-      setInterval(render, 60 * 1000);
+      function toggleHistory() {
+        historyOpen = !historyOpen;
+
+        const box = document.getElementById("history");
+        const btn = document.getElementById("toggleHistoryBtn");
+        const controls = document.getElementById("historyControls");
+
+        if (historyOpen) {
+          btn.textContent = "Hide History";
+          controls.style.display = "block";
+          box.style.display = "block";
+          renderHistory();
+        } else {
+          btn.textContent = "Show History";
+          controls.style.display = "none";
+          box.style.display = "none";
+        }
+      }
+
+      function toggleSort() {
+        sortNewestFirst = !sortNewestFirst;
+        document.getElementById("sortLabel").textContent =
+          sortNewestFirst ? "Newest" : "Oldest";
+        renderHistory();
+      }
+
+      function renderHistory() {
+        const box = document.getElementById("history");
+        box.innerHTML = "";
+
+        const todayUtcMidnight =
+          Math.floor(Date.now() / MS_PER_DAY) * MS_PER_DAY;
+
+        let entries = [];
+        let current = HISTORY_START_UTC;
+        let value = HISTORY_START_VALUE;
+
+        while (current <= Date.now()) {
+          entries.push({ time: current, value });
+          current += MS_PER_DAY;
+          value += DAILY_INCREASE;
+
+          if (current >= SPECIAL_DAY_UTC) {
+            value -= SPECIAL_REDUCTION;
+          }
+        }
+
+        if (sortNewestFirst) {
+          entries.reverse();
+        }
+
+        entries.forEach(entry => {
+          const date = new Date(entry.time);
+          let label = "";
+
+          if (entry.time === todayUtcMidnight) {
+            label = "<span class='label'>Today</span>";
+          } else if (entry.time === todayUtcMidnight - MS_PER_DAY) {
+            label = "<span class='label'>Yesterday</span>";
+          }
+
+          box.innerHTML += `<div>
+            ${date.toISOString().slice(0, 10)}${label}
+            — ${entry.value.toLocaleString()}
+          </div>`;
+        });
+      }
+
+      const audio = document.getElementById("bgAudio");
+      const audioBtn = document.getElementById("audioToggleBtn");
+
+      function startAudioOnce() {
+        if (!audioStarted) {
+          audio.play().catch(() => {});
+          audioStarted = true;
+        }
+      }
+
+      function toggleAudio() {
+        startAudioOnce();
+
+        if (audio.muted) {
+          audio.muted = false;
+          audioBtn.textContent = "Mute Music";
+        } else {
+          audio.muted = true;
+          audioBtn.textContent = "Unmute Music";
+        }
+      }
+
+      document.addEventListener("click", startAudioOnce, { once: true });
+      document.addEventListener("touchstart", startAudioOnce, { once: true });
+
+      renderMain();
+      setInterval(renderMain, 60 * 1000);
     </script>
   </body>
 </html>
